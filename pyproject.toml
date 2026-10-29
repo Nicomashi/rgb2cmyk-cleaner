@@ -1,0 +1,21 @@
+[project]
+name = "rgb2cmyk-cleaner"
+version = "0.1.0"
+description = "Local experimental CMYK separation cleaner"
+requires-python = ">=3.11"
+dependencies = [
+    "pillow>=11",
+    "numpy>=2",
+    "pymupdf>=1.25",
+    "fastapi>=0.115",
+    "uvicorn>=0.34",
+    "python-multipart>=0.0.20",
+    "pyvips[binary]>=3.2.0",
+    "tifffile>=2026.3.3",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "httpx>=0.28"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

@@ -1,0 +1,24 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.DS_Store
+in examples/
+samples/
+output/
+tmp/
+*.log
+profiles/
+
+.runtime/
+
+node_modules/
+.env
+.env.*
+!.env.example
+
+# Local working notes and one-off sample preparation
+/PROJECT_BRIEF.md
+/TEST_REPORT.md
+/WEBSITE_LAUNCH_GUIDE.md
+/design-qa.md
+/prepare_samples.py

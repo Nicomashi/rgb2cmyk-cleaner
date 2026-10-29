@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="workspace-id" content="__WORKSPACE_ID__" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta
+      name="description"
+      content="Локальная обработка CMYK с контролем цвета"
+    />
+    <title>CMYK Clean</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <sp-theme color="dark" scale="medium"
+      ><div id="app">
+        <header class="topbar">
+          <div class="brand">
+            <sp-icon-color></sp-icon-color><strong>CMYK Clean</strong>
+          </div>
+          <span id="filename" class="filename">Файл не открыт</span>
+          <sp-action-button id="openFile" quiet
+            ><sp-icon-folder slot="icon"></sp-icon-folder
+            >Открыть</sp-action-button
+          >
+          <div class="top-spacer"></div>
+          <sp-action-button id="demo" quiet
+            ><img
+              slot="icon"
+              src="/static/demo.jpg"
+              alt=""
+              class="demo-thumb"
+            />Демо<sp-tooltip self-managed
+              >Открыть демонстрационное изображение</sp-tooltip
+            ></sp-action-button
+          >
+          <div id="exportState" hidden>
+            <span id="exportText"></span
+            ><sp-progress-bar
+              id="exportProgress"
+              label="Экспорт TIFF"
+              max="100"
+            ></sp-progress-bar
+            ><sp-action-button id="cancelExport" quiet label="Отменить экспорт"
+              ><sp-icon-close slot="icon"></sp-icon-close
+              ><sp-tooltip self-managed
+                >Отменить экспорт</sp-tooltip
+              ></sp-action-button
+            >
+          </div>
+          <sp-button id="export" variant="accent" disabled
+            ><sp-icon-download slot="icon"></sp-icon-download
+            ><span id="exportLabel">Скачать TIFF</span></sp-button
+          >
+        </header>
+        <main>
+          <section class="workspace" aria-label="Сравнение изображений">
+            <div
+              id="viewport"
+              tabindex="0"
+              aria-label="Изображение. Shift и клик — добавить пробник. Перетаскивание — перемещение. Колесо — масштаб."
+            >
+              <div id="empty">
+                <sp-icon-folder size="xl"></sp-icon-folder
+                ><span>Перетащите изображение</span
+                ><sp-button id="emptyOpen" variant="secondary"
+                  >Открыть файл</sp-button
+                >
+              </div>
+              <div id="scene" hidden>
+                <img
+                  id="before"
+                  alt="Исходное изображение"
+                  draggable="false"
+                /><img
+                  id="after"
+                  alt="Обработанное изображение"
+                  draggable="false"
+                />
+                <div id="markers"></div>
+              </div>
+              <div
+                id="divider"
+                role="slider"
+                aria-label="Граница сравнения"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="50"
+                tabindex="0"
+                hidden
+              >
+                <div class="divider-handle">
+                  <sp-icon-chevron-left></sp-icon-chevron-left
+                  ><sp-icon-chevron-right></sp-icon-chevron-right>
+                </div>
+              </div>
+              <div
+                id="previewProgress"
+                class="preview-progress"
+                hidden
+                role="status"
+              >
+                <span>Пересчёт превью</span
+                ><sp-progress-bar
+                  indeterminate
+                  label="Пересчёт превью"
+                ></sp-progress-bar>
+              </div>
+              <div id="notice" hidden role="alert">
+                <span id="noticeText"></span
+                ><sp-action-button id="retry" quiet>Повторить</sp-action-button
+                ><sp-action-button
+                  id="dismissNotice"
+                  quiet
+                  label="Закрыть сообщение"
+                  ><sp-icon-close slot="icon"></sp-icon-close
+                ></sp-action-button>
+              </div>
+              <div id="zoomBar" class="zoom-bar" hidden>
+                <sp-action-button id="zoomOut" quiet label="Уменьшить"
+                  ><sp-icon-remove slot="icon"></sp-icon-remove
+                  ><sp-tooltip self-managed
+                    >Уменьшить</sp-tooltip
+                  ></sp-action-button
+                >
+                <label class="zoom-value"
+                  ><input
+                    id="zoomValue"
+                    type="number"
+                    min="1"
+                    max="800"
+                    step="1"
+                    value="100"
+                    aria-label="Масштаб в процентах"
+                  /><span>%</span></label
+                >
+                <sp-action-button id="zoomIn" quiet label="Увеличить"
+                  ><sp-icon-add slot="icon"></sp-icon-add
+                  ><sp-tooltip self-managed
+                    >Увеличить</sp-tooltip
+                  ></sp-action-button
+                >
+                <span class="separator"></span
+                ><sp-action-button id="fit" quiet label="Вписать изображение"
+                  ><sp-icon-full-screen slot="icon"></sp-icon-full-screen
+                  ><sp-tooltip self-managed
+                    >Вписать · 0</sp-tooltip
+                  ></sp-action-button
+                >
+                <sp-action-button
+                  id="actual"
+                  quiet
+                  label="Масштаб 100 процентов"
+                  >1:1<sp-tooltip self-managed
+                    >100% оригинала · 1. Превью может быть
+                    уменьшено.</sp-tooltip
+                  ></sp-action-button
+                >
+                <sp-action-button
+                  id="hand"
+                  quiet
+                  toggles
+                  label="Режим перемещения"
+                  ><sp-icon-hand slot="icon"></sp-icon-hand
+                  ><sp-tooltip self-managed
+                    >Перемещение · удерживайте пробел</sp-tooltip
+                  ></sp-action-button
+                >
+              </div>
+            </div>
+            <footer class="statusbar">
+              <span id="metadata">—</span>
+              <div>
+                <span id="resultMeta"></span
+                ><sp-action-button
+                  id="fileInfo"
+                  quiet
+                  label="Сведения об изображении"
+                  ><sp-icon-info-outline slot="icon"></sp-icon-info-outline
+                  ><sp-tooltip id="fileTooltip" self-managed placement="top"
+                    >PNG, JPEG, TIFF · 8 бит</sp-tooltip
+                  ></sp-action-button
+                >
+              </div>
+            </footer>
+          </section>
+          <aside aria-label="Настройки и пробники">
+            <section class="processing" aria-label="Обработка">
+              <div class="field-row">
+                <label for="beforeMode">Слева</label>
+                <select id="beforeMode">
+                  <option value="cmyk" selected>CMYK до очистки</option>
+                  <option value="source">Исходник · RGB</option>
+                </select>
+              </div>
+              <div class="field-row">
+                <label for="profile">Профиль</label
+                ><select id="profile">
+                  <option value="source">FOGRA39</option>
+                  <option value="upload">Загрузить ICC…</option>
+                </select>
+              </div>
+              <div class="field-row">
+                <label for="preset">Пресет</label
+                ><select id="preset">
+                  <option value="default">Основной</option>
+                  <option value="custom" disabled>Изменённый</option>
+                  <option value="load">Загрузить…</option>
+                  <option value="save">Сохранить…</option>
+                </select>
+              </div>
+              <div class="adjustments">
+                <div class="adjustment">
+                  <label id="strength-label">Очистка</label
+                  ><sp-slider
+                    variant="filled"
+                    id="strength"
+                    label="Очистка"
+                    label-visibility="none"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value="100"
+                    size="s"
+                  ></sp-slider
+                  ><sp-number-field
+                    id="strengthNumber"
+                    label="Очистка, проценты"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value="100"
+                    hide-stepper
+                    size="s"
+                  ></sp-number-field
+                  ><span class="unit">%</span
+                  ><sp-action-button
+                    quiet
+                    class="help"
+                    label="Об очистке"
+                    data-help="Уменьшает минимальную из красок C, M и Y. 100% — полная сила очистки."
+                    ><sp-icon-help-outline slot="icon"></sp-icon-help-outline
+                  ></sp-action-button>
+                </div>
+                <div class="adjustment">
+                  <label>Компенсация K</label
+                  ><sp-slider
+                    variant="filled"
+                    id="compensation"
+                    label="Компенсация K"
+                    label-visibility="none"
+                    min="0"
+                    max="2"
+                    step="0.01"
+                    value="0.82"
+                    size="s"
+                  ></sp-slider
+                  ><sp-number-field
+                    id="compensationNumber"
+                    label="Компенсация K, коэффициент"
+                    min="0"
+                    max="2"
+                    step="0.01"
+                    value="0.82"
+                    hide-stepper
+                    size="s"
+                  ></sp-number-field
+                  ><span class="unit">×</span
+                  ><sp-action-button
+                    quiet
+                    class="help"
+                    label="О компенсации K"
+                    data-help="Добавляет чёрный взамен удалённой краски. Ограничивается пределом K и TAC."
+                    ><sp-icon-help-outline slot="icon"></sp-icon-help-outline
+                  ></sp-action-button>
+                </div>
+                <div class="adjustment">
+                  <label>Защита нейтралей</label
+                  ><sp-slider
+                    variant="filled"
+                    id="neutral_protection"
+                    label="Защита нейтралей"
+                    label-visibility="none"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value="100"
+                    size="s"
+                  ></sp-slider
+                  ><sp-number-field
+                    id="neutral_protectionNumber"
+                    label="Защита нейтралей, проценты"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value="100"
+                    hide-stepper
+                    size="s"
+                  ></sp-number-field
+                  ><span class="unit">%</span
+                  ><sp-action-button
+                    quiet
+                    class="help"
+                    label="О защите нейтралей"
+                    data-help="Ослабляет очистку при близких значениях C, M и Y, сохраняя нейтральные оттенки."
+                    ><sp-icon-help-outline slot="icon"></sp-icon-help-outline
+                  ></sp-action-button>
+                </div>
+              </div>
+              <details id="advanced">
+                <summary>Дополнительно</summary>
+                <div class="advanced-content">
+                  <div class="field-row">
+                    <label>Предел K, %</label
+                    ><sp-number-field
+                      id="max_k"
+                      label="Предел K"
+                      min="0"
+                      max="100"
+                      value="100"
+                      size="s"
+                    ></sp-number-field><sp-action-button quiet class="help" label="О пределе K" data-help="Максимальное содержание чёрной краски K после добавления, в процентах. Уже имеющийся K выше предела не уменьшается."><sp-icon-help-outline slot="icon"></sp-icon-help-outline></sp-action-button>
+                  </div>
+                  <div class="field-row">
+                    <label>Лимит TAC, %</label
+                    ><sp-number-field
+                      id="tac"
+                      label="Лимит TAC"
+                      min="0"
+                      max="400"
+                      value="300"
+                      size="s"
+                    ></sp-number-field><sp-action-button quiet class="help" label="О лимите TAC" data-help="TAC — сумма C + M + Y + K. Лимит ограничивает добавление чёрного. Если исходник уже превышает лимит, превышение может сохраниться."><sp-icon-help-outline slot="icon"></sp-icon-help-outline></sp-action-button>
+                  </div>
+                  <div class="check-help-row"><sp-checkbox id="smooth_ties" checked size="s"
+                    >Сглаживать переходы</sp-checkbox
+                  ><sp-action-button quiet class="help" label="О сглаживании переходов" data-help="Плавно ослабляет очистку там, где два минимальных канала C, M и Y близки. Это смягчает резкие переходы между областями, в которых удаляется разная краска."><sp-icon-help-outline slot="icon"></sp-icon-help-outline></sp-action-button></div>
+                  <div class="field-row">
+                    <label for="channel">Просмотр</label
+                    ><select id="channel">
+                      <option value="color">Цвет</option>
+                      <option>C</option>
+                      <option>M</option>
+                      <option>Y</option>
+                      <option>K</option>
+                      <option value="map">Карта очистки</option>
+                    </select><sp-action-button quiet class="help" label="О режимах просмотра" data-help="Цвет — обычное сравнение. C, M, Y и K — отдельная краска до и после очистки. Карта очистки показывает, где и насколько удалена краска. Режим просмотра не меняет экспортируемый результат."><sp-icon-help-outline slot="icon"></sp-icon-help-outline></sp-action-button>
+                  </div>
+                  <div class="extra-actions">
+                    <div class="extra-action"><sp-action-button id="exportPng" quiet disabled
+                      >PNG-превью</sp-action-button
+                    ><sp-action-button quiet class="help" label="О PNG-превью" data-help="Скачать результат как уменьшенное RGB-превью PNG в sRGB, до 2400 пикселей по длинной стороне. Для печатного CMYK в исходном размере используйте «Скачать TIFF»."><sp-icon-help-outline slot="icon"></sp-icon-help-outline></sp-action-button></div><div class="extra-action"><sp-action-button id="exportReport" quiet disabled
+                      >Отчёт</sp-action-button
+                    ><sp-action-button quiet class="help" label="Об отчёте" data-help="Скачать JSON с параметрами обработки, профилем, размерами и статистикой. Если полный TIFF уже готов, используется отчёт этого экспорта; иначе — текущего превью."><sp-icon-help-outline slot="icon"></sp-icon-help-outline></sp-action-button></div>
+                  </div>
+                </div>
+              </details>
+            </section>
+            <section class="samples">
+              <div class="section-heading">
+                <h2>Пробники</h2>
+                <div class="sample-actions">
+                  <select id="area" aria-label="Область замера">
+                    <option value="1">1 × 1</option>
+                    <option value="3">3 × 3</option>
+                    <option value="5" selected>5 × 5</option>
+                    <option value="11">11 × 11</option></select
+                  ><sp-action-button
+                    quiet
+                    class="help"
+                    label="Как пользоваться пробниками"
+                    data-help="Наведение — текущий цвет. Shift + клик — закрепить. Пробник можно перетащить. Зажмите Alt (Option) — значения рядом с пробниками: сверху до, снизу после, C M Y K. Замеры по пикселям оригинала; цвет образца — экранный sRGB. Область задаётся в пикселях оригинала."
+                    ><sp-icon-help-outline
+                      slot="icon"
+                    ></sp-icon-help-outline></sp-action-button
+                  ><sp-action-button
+                    id="clearSamples"
+                    quiet
+                    label="Удалить все пробники"
+                    disabled
+                    ><sp-icon-delete slot="icon"></sp-icon-delete
+                    ><sp-tooltip self-managed
+                      >Удалить все пробники</sp-tooltip
+                    ></sp-action-button
+                  >
+                </div>
+              </div>
+              <div id="liveSample" class="sample-row live"></div>
+              <div id="sampleList"></div>
+            </section>
+          </aside>
+        </main>
+        <div
+          id="globalProgress"
+          hidden
+          role="dialog"
+          aria-modal="true"
+          aria-label="Открытие изображения"
+          tabindex="-1"
+        >
+          <div class="global-card">
+            <sp-icon-folder size="xl"></sp-icon-folder>
+            <h2 id="globalTitle">Открываем изображение</h2>
+            <sp-progress-bar
+              id="globalBar"
+              indeterminate
+              label="Открытие изображения"
+            ></sp-progress-bar
+            ><span id="globalDetail"></span
+            ><sp-button id="cancelUpload" variant="secondary"
+              >Отменить</sp-button
+            >
+          </div>
+        </div>
+      </div></sp-theme
+    >
+    <input
+      id="file"
+      type="file"
+      accept=".png,.jpg,.jpeg,.tif,.tiff"
+      hidden
+    /><input id="icc" type="file" accept=".icc,.icm" hidden /><input
+      id="presetFile"
+      type="file"
+      accept=".json"
+      hidden
+    />
+    <noscript>Для работы приложения включите JavaScript.</noscript>
+    <script type="module" src="/static/ui.js"></script>
+  </body>
+</html>

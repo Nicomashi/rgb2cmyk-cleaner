@@ -1,0 +1,22 @@
+{
+  "name": "cmyk-clean-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild frontend/main.js --bundle --minify --format=esm --target=es2022 --outfile=static/ui.js --legal-comments=eof"
+  },
+  "dependencies": {
+    "@spectrum-web-components/theme": "1.12.5",
+    "@spectrum-web-components/button": "1.12.5",
+    "@spectrum-web-components/action-button": "1.12.5",
+    "@spectrum-web-components/slider": "1.12.5",
+    "@spectrum-web-components/number-field": "1.12.5",
+    "@spectrum-web-components/checkbox": "1.12.5",
+    "@spectrum-web-components/tooltip": "1.12.5",
+    "@spectrum-web-components/progress-bar": "1.12.5",
+    "@spectrum-web-components/icons-workflow": "1.12.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
