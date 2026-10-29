@@ -1,4 +1,9 @@
 import { layoutProbeReadouts } from "./probe-layout.js";
+import { createI18n, bindStaticTranslations } from "./i18n.js";
+let languageStorage;
+try { languageStorage = window.localStorage; } catch { /* Storage may be disabled. */ }
+const i18n = createI18n(languageStorage);
+const t = i18n.t, translateMessage = i18n.translateMessage;
 const $ = (id) => document.getElementById(id);
 // Editor shortcuts (including repeated Space) are not keyboard focus navigation.
 document.addEventListener("pointerdown", () => document.documentElement.classList.add("pointer-input"), true);
@@ -49,6 +54,7 @@ let fullJob = null,
   fullBusy = false,
   jobTimer,
   exportDownloaded = false;
+let noticeMessage = "", noticeStale = false, progressTitle = "Открываем изображение";
 const icon = (name) => `<sp-icon-${name} slot="icon"></sp-icon-${name}>`;
 const escape = (value) =>
   String(value).replace(
@@ -83,15 +89,17 @@ const json = (body) => ({
   body: JSON.stringify(body),
 });
 function notice(message, retry = null) {
-  const stale = message.includes("Страница устарела");
-  $("noticeText").textContent = message;
+  noticeMessage = message;
+  const stale = noticeStale = message.includes("Страница устарела") || message.includes("Обновите страницу для новой рабочей сессии");
+  $("noticeText").textContent = translateMessage(message);
   $("notice").hidden = false;
   retryAction = stale ? () => location.reload() : retry;
-  $("retry").textContent = stale ? "Обновить страницу" : "Повторить";
+  $("retry").textContent = t(stale ? "Обновить страницу" : "Повторить");
   $("retry").hidden = !retryAction;
 }
 function clearNotice() {
   $("notice").hidden = true;
+  noticeMessage = "";
   retryAction = null;
 }
 $("dismissNotice").onclick = clearNotice;
@@ -140,7 +148,8 @@ function syncButtons() {
 function globalProgress(show, title = "Открываем изображение", percent = null) {
   loading = show;
   $("globalProgress").hidden = !show;
-  $("globalTitle").textContent = title;
+  progressTitle = title;
+  $("globalTitle").textContent = t(title);
   $("globalBar").indeterminate = percent === null;
   if (percent !== null) $("globalBar").progress = percent;
   $("globalDetail").textContent =
@@ -172,6 +181,9 @@ for (const key of ["strength", "compensation", "neutral_protection"]) {
   slider.addEventListener("input", () => {
     number.value = slider.value;
     changed();
+  });
+  slider.addEventListener("change", () => {
+    number.value = slider.value;
   });
   number.addEventListener("change", () => {
     slider.value = number.value;
@@ -250,24 +262,9 @@ async function process() {
     current = data;
     $("before").src = data.before;
     $("after").src = data.after;
-    $("before").alt = data.left_label;
-    $("after").alt = data.right_label;
     $("empty").hidden = true;
     for (const id of ["scene", "divider", "zoomBar"]) $(id).hidden = false;
-    $("metadata").textContent =
-      `${data.original_size.join(" × ")} · ${data.source_profile}`;
-    $("resultMeta").textContent = `${data.source_mode} → CMYK`;
-    $("beforeMode").querySelector('[value="source"]').textContent = `Исходник · ${data.source_mode}`;
-    const details = [
-      `Превью: ${data.width} × ${data.height}. Экспорт: ${data.original_size.join(" × ")}.`,
-      ...data.notes,
-      `Изменено: ${data.stats.changed_pct}%. Макс. TAC: ${data.stats.tac_before}% → ${data.stats.tac_after}%.`,
-    ];
-    if (data.stats.tac_exceeded_pct)
-      details.push(
-        `Выше лимита TAC: ${data.stats.tac_exceeded_pct}% пикселей. Лимит ограничивает добавление K.`,
-      );
-    $("fileTooltip").textContent = details.join(" ");
+    renderMetadata();
     if (first || fitMode) fit();
     else renderView();
     renderMarkers();
@@ -297,6 +294,32 @@ async function process() {
     } else if (pending && source) process();
   }
 }
+function renderMetadata() {
+  const data = current;
+  if (!data) {
+    $("fileTooltip").textContent = t("PNG, JPEG, TIFF · 8 бит");
+    $("beforeMode").querySelector('[value="source"]').textContent = t("Исходник · RGB");
+    return;
+  }
+  $("before").alt = translateMessage(data.left_label);
+  $("after").alt = translateMessage(data.right_label);
+  $("metadata").textContent = `${data.original_size.join(" × ")} · ${data.source_profile}`;
+  $("resultMeta").textContent = `${data.source_mode} → CMYK`;
+  $("beforeMode").querySelector('[value="source"]').textContent = t("Исходник · {mode}", {mode: data.source_mode});
+  const details = [
+    t("Превью: {width} × {height}. Экспорт: {size}.", {width: data.width, height: data.height, size: data.original_size.join(" × ")}),
+    ...data.notes.map(note => translateMessage(note)),
+    t("Изменено: {changed}%. Макс. TAC: {before}% → {after}%.", {changed: data.stats.changed_pct, before: data.stats.tac_before, after: data.stats.tac_after}),
+  ];
+  if (data.stats.tac_exceeded_pct)
+    details.push(t("Выше лимита TAC: {percent}% пикселей. Лимит ограничивает добавление K.", {percent: data.stats.tac_exceeded_pct}));
+  $("fileTooltip").textContent = details.join(" ");
+}
+function renderExportLabels() {
+  $("exportLabel").textContent = t(fullBusy ? "Подготовка TIFF" : "Скачать TIFF");
+  if (fullBusy) $("exportText").textContent = fullJob?.status === "cancelling"
+    ? t("Отмена…") : fullJob ? `TIFF · ${fullJob.progress}%` : t("Подготовка TIFF");
+}
 function clearMaterial() {
   material++;
   revision++;
@@ -320,7 +343,9 @@ function clearMaterial() {
   split = 0.5;
   drag = null;
   samplePending = false;
-  $("filename").textContent = "Файл не открыт";
+  $("filename").textContent = t("Файл не открыт");
+  $("filename").removeAttribute("title");
+  renderMetadata();
   $("metadata").textContent = "—";
   $("resultMeta").textContent = "";
   $("before").removeAttribute("src");
@@ -336,7 +361,7 @@ function clearMaterial() {
     $(id).hidden = true;
   $("markers").replaceChildren();
   $("sampleList").replaceChildren();
-  $("exportLabel").textContent = "Скачать TIFF";
+  $("exportLabel").textContent = t("Скачать TIFF");
   renderLive();
   syncButtons();
   clearNotice();
@@ -518,7 +543,11 @@ $("presetFile").onchange = async () => {
   try {
     const file = $("presetFile").files[0];
     if (!file) return;
-    const data = JSON.parse(await file.text());
+    let data;
+    try { data = JSON.parse(await file.text()); }
+    catch { throw new Error("Некорректный пресет."); }
+    if (!data || typeof data !== "object" || !data.settings)
+      throw new Error("Некорректный пресет.");
     if (data.version !== 1 || data.mode !== "A")
       throw new Error("Нужен пресет режима A, версия 1.");
     const s = data.settings;
@@ -851,7 +880,7 @@ function renderMarkers() {
   $("markers").innerHTML = probes
     .map(
       (p) =>
-        `<button class="marker" data-id="${p.id}" aria-label="Пробник ${p.id}. Стрелки — перемещение, Delete — удалить." style="left:${p.x + 0.5}px;top:${p.y + 0.5}px;transform:translate(-50%,-50%) scale(${1 / zoom})"><span class="probe-leader" aria-hidden="true"></span>${icon("crosshairs")}<b>${p.id}</b><span class="probe-readout" aria-hidden="true"></span></button>`,
+        `<button class="marker" data-id="${p.id}" aria-label="${escape(t("Пробник {id}. Стрелки — перемещение, Delete — удалить.", {id: p.id}))}" style="left:${p.x + 0.5}px;top:${p.y + 0.5}px;transform:translate(-50%,-50%) scale(${1 / zoom})"><span class="probe-leader" aria-hidden="true"></span>${icon("crosshairs")}<b>${p.id}</b><span class="probe-readout" aria-hidden="true"></span></button>`,
     )
     .join("");
   renderMarkerReadouts();
@@ -926,11 +955,11 @@ function sampleHTML(p, isLive = false) {
     ? `<i style="background:rgb(${d.swatch_cmyk_before.join(",")})"></i><i style="background:rgb(${d.swatch_after.join(",")})"></i>`
     : "<i></i>";
   const title = d
-    ? `X ${d.x} · Y ${d.y} · TAC ${d.tac}% · Пиксели оригинала`
+    ? `X ${d.x} · Y ${d.y} · TAC ${d.tac}% · ${t("Пиксели оригинала")}`
     : isLive
-      ? "Наведите на изображение"
-      : "Пересчёт";
-  return `<span class="sample-id">${isLive ? icon("eyedropper") : p.id}</span><span class="sample-swatch" title="${escape(title)}">${swatch}</span><div class="sample-values"><div><small title="CMYK до очистки, %">До</small><span class="channel-values">${d ? fmt(d.before) : "—"}</span></div><div><small title="CMYK после очистки, %">После</small><span class="channel-values">${d ? fmt(d.after) : "—"}</span></div></div>${isLive ? "<span></span>" : `<sp-action-button quiet data-remove="${p.id}" label="Удалить пробник ${p.id}">${icon("delete")}<sp-tooltip self-managed>Удалить пробник ${p.id}</sp-tooltip></sp-action-button>`}`;
+      ? t("Наведите на изображение")
+      : t("Пересчёт");
+  return `<span class="sample-id">${isLive ? icon("eyedropper") : p.id}</span><span class="sample-swatch" title="${escape(title)}">${swatch}</span><div class="sample-values"><div><small title="${t("CMYK до очистки, %")}">${t("До")}</small><span class="channel-values">${d ? fmt(d.before) : "—"}</span></div><div><small title="${t("CMYK после очистки, %")}">${t("После")}</small><span class="channel-values">${d ? fmt(d.after) : "—"}</span></div></div>${isLive ? "<span></span>" : `<sp-action-button quiet data-remove="${p.id}" label="${escape(t("Удалить пробник {id}", {id: p.id}))}">${icon("delete")}<sp-tooltip self-managed>${escape(t("Удалить пробник {id}", {id: p.id}))}</sp-tooltip></sp-action-button>`}`;
 }
 function renderLive() {
   $("liveSample").innerHTML = sampleHTML(live, true);
@@ -1047,10 +1076,8 @@ function showJob(job) {
   $("exportState").hidden = !fullBusy;
   $("exportProgress").indeterminate = job.status === "queued";
   $("exportProgress").progress = job.progress;
-  $("exportText").textContent =
-    job.status === "cancelling" ? "Отмена…" : `TIFF · ${job.progress}%`;
   $("cancelExport").disabled = job.status === "cancelling";
-  $("exportLabel").textContent = fullBusy ? "Подготовка TIFF" : "Скачать TIFF";
+  renderExportLabels();
   if (job.status === "complete" && !exportDownloaded) {
     exportDownloaded = true;
     download(job.download);
@@ -1077,12 +1104,13 @@ async function pollJob(id, m) {
 async function startExport() {
   if (!current || busy || pending || fullBusy) return;
   fullBusy = true;
+  fullJob = null;
   exportDownloaded = false;
   syncButtons();
   const m = material;
   $("exportState").hidden = false;
   $("exportProgress").indeterminate = true;
-  $("exportText").textContent = "Подготовка TIFF";
+  $("exportText").textContent = t("Подготовка TIFF");
   try {
     const job = await api("/api/full-export/" + current.id, { method: "POST" });
     if (m !== material) return;
@@ -1187,6 +1215,27 @@ window.addEventListener("pagehide", () => {
 window.addEventListener("pageshow", (e) => {
   if (e.persisted) location.reload();
 });
+const applyStaticLanguage = bindStaticTranslations(document, i18n);
+function applyLanguage() {
+  applyStaticLanguage();
+  $("language").value = i18n.language;
+  if (!source) $("filename").textContent = t("Файл не открыт");
+  renderMetadata();
+  renderExportLabels();
+  $("globalTitle").textContent = t(progressTitle);
+  if (noticeMessage) {
+    $("noticeText").textContent = translateMessage(noticeMessage);
+    $("retry").textContent = t(noticeStale ? "Обновить страницу" : "Повторить");
+  }
+  $("helpPopover")?.remove();
+  renderMarkers();
+  renderLive();
+  renderProbes();
+}
+$("language").addEventListener("change", () => {
+  if (i18n.setLanguage($("language").value)) applyLanguage();
+});
+applyLanguage();
 applyDefaults();
 clearMaterial();
 async function init() {
